@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, ChannelType, ActionRowBuilder, ChannelSelectMenuBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, ChannelType, ActionRowBuilder, ChannelSelectMenuBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -224,6 +224,39 @@ client.on('interactionCreate', async (interaction) => {
                 ephemeral: true
             });
         }
+    }
+});
+
+// Ticket kanalı oluşturulduğunda otomatik embed mesaj gönder
+client.on('channelCreate', async (channel) => {
+    // Sadece text kanallarını kontrol et
+    if (channel.type !== ChannelType.GuildText) return;
+
+    // Kanal adı "ticket" ile başlıyor mu kontrol et
+    if (!channel.name.toLowerCase().startsWith('ticket')) return;
+
+    try {
+        const ticketEmbed = new EmbedBuilder()
+            .setColor(0x2B2D31)
+            .setTitle('TİCKET AÇMADAN ÖNCE OKUYUN')
+            .setDescription(
+                `RPQM takımına sorularınızı yöneltmek ve bilgi almak adına yukarıdaki butona tıklayarak bir ticket oluşturabilirsiniz.\n\n` +
+                `**Dikkat!**\n` +
+                `Ticket yoluyla birer RPQ Bildirisi / İzin Talebi oluşturamazsınız. Bu tip konular [forum ana sayfamızda](https://forum-tr.gta.world/index.php?/forum/198-roleplay-quality-talepleri-bildiri-i%CC%87zin/) ilerler.\n\n` +
+                `[RPQ Bildirisi oluşturmak](https://gtaw.link/rpqmbildiri)\n` +
+                `[RPQ İzin Talebi oluşturmak](https://gtaw.link/rpqmizin)\n\n` +
+                `**Öncesinde Bilinmesi Gerekenler**\n` +
+                `Bir RPQ Ticketi oluşturmak şu sebeplerden kaynaklanmamalıdır:\n\n` +
+                `• **Bir araç/mülk/işletme satın almak istiyorum, inceler misiniz?** -> Ticketiniz incelenemez, satın alımlarda otokontrol önceliği vardır.\n\n` +
+                `• **Bir RPQ yetkilisiyle özel konuşmak veya şikayette bulunmak istiyorum.** -> Head of RPQM'e doğrudan ulaşabilir veya Staff Report oluşturabilirsiniz.\n\n` +
+                `• **Bir bildiri/izin talebi oluşturdum, ne zaman sonuçlanacağını soracağım.** -> RPQ Bildiri ve izinleri en kısa sürede incelenir, nihai sonuçlar gizli tutulur.\n\n` +
+                `• **Başka bir takımdan başvuruma dair ret aldım, burada hakkımı arayacağım.** -> RPQM, diğer takımlara dair yakınmanız gereken takım değildir. Zaten diğer takımlarla ortak çalışır.`
+            );
+
+        await channel.send({ embeds: [ticketEmbed] });
+        console.log(`[TICKET] ${channel.guild.name} sunucusunda #${channel.name} kanalına bilgi mesajı gönderildi.`);
+    } catch (error) {
+        console.error(`[TICKET] Embed gönderilemedi:`, error);
     }
 });
 
