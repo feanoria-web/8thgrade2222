@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, ChannelType, ActionRowBuilder, ChannelSelectMenuBuilder, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, REST, Routes, SlashCommandBuilder, ChannelType, ActionRowBuilder, ChannelSelectMenuBuilder, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -138,11 +138,27 @@ client.on('messageCreate', async (message) => {
                 return message.reply('❌ Alıntılanan mesajda metin bulunamadı.');
             }
 
+            // Sadece "ticket" ile başlayan kanalları filtrele
+            const ticketChannels = message.guild.channels.cache
+                .filter(ch => ch.type === ChannelType.GuildText && ch.name.toLowerCase().startsWith('ticket'))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .first(25); // Discord limiti: maksimum 25 seçenek
+
+            if (ticketChannels.length === 0) {
+                return message.reply('❌ Sunucuda "ticket" ile başlayan kanal bulunamadı.');
+            }
+
+            const options = ticketChannels.map(ch => ({
+                label: `#${ch.name}`.substring(0, 100),
+                value: ch.id,
+                description: ch.parent?.name?.substring(0, 100) || 'Kategori yok'
+            }));
+
             const row = new ActionRowBuilder().addComponents(
-                new ChannelSelectMenuBuilder()
+                new StringSelectMenuBuilder()
                     .setCustomId(`rpqm_channel_${message.id}`)
-                    .setPlaceholder('Mesajın gönderileceği kanalı seçin...')
-                    .setChannelTypes(ChannelType.GuildText)
+                    .setPlaceholder('Ticket kanalı seçin...')
+                    .addOptions(options)
             );
 
             const prompt = await message.reply({
@@ -184,6 +200,63 @@ client.on('messageCreate', async (message) => {
         } catch (error) {
             console.error('Alıntılanan mesaj alınamadı:', error);
             await message.reply('❌ Alıntılanan mesaj alınamadı.');
+        }
+    }
+
+    // !rpqm2 kanal-adı - Manuel kanal adı girişi ile mesaj gönderme
+    if (message.content.startsWith('!rpqm2 ')) {
+        if (!hasPermission(message.member, PermissionFlagsBits.ManageMessages)) {
+            return message.reply('❌ Bu komutu kullanma yetkiniz yok.');
+        }
+
+        if (!message.reference) {
+            return message.reply('❌ Bir mesajı alıntılayarak (reply) `!rpqm2 kanal-adı` yazmalısınız.');
+        }
+
+        const channelName = message.content.slice(7).trim().toLowerCase(); // "!rpqm2 " = 7 karakter
+
+        if (!channelName) {
+            return message.reply('❌ Kanal adı belirtmelisiniz. Örnek: `!rpqm2 ticket-1234`');
+        }
+
+        try {
+            const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
+            const content = referencedMessage.content;
+
+            if (!content || content.length === 0) {
+                return message.reply('❌ Alıntılanan mesajda metin bulunamadı.');
+            }
+
+            // Kanal adını ara (ticket ile başlayanlar arasında)
+            const targetChannel = message.guild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText &&
+                      ch.name.toLowerCase().startsWith('ticket') &&
+                      ch.name.toLowerCase() === channelName
+            );
+
+            if (!targetChannel) {
+                // Tam eşleşme bulunamazsa, içeren kanalları listele
+                const similarChannels = message.guild.channels.cache
+                    .filter(ch => ch.type === ChannelType.GuildText &&
+                                  ch.name.toLowerCase().startsWith('ticket') &&
+                                  ch.name.toLowerCase().includes(channelName))
+                    .map(ch => `\`${ch.name}\``)
+                    .slice(0, 10);
+
+                if (similarChannels.length > 0) {
+                    return message.reply(`❌ Kanal bulunamadı. Benzer kanallar:\n${similarChannels.join(', ')}`);
+                }
+                return message.reply('❌ Bu isimde bir ticket kanalı bulunamadı.');
+            }
+
+            // Mesajı gönder
+            await targetChannel.send({ content });
+            logUsage(message.author, targetChannel, message.guild, content);
+            await message.reply(`✓ Mesaj **#${targetChannel.name}** kanalına gönderildi.`);
+
+        } catch (error) {
+            console.error('rpqm2 hatası:', error);
+            await message.reply('❌ Bir hata oluştu.');
         }
     }
 });
