@@ -96,16 +96,38 @@ let sheetsAuth = null;
 async function getGoogleAuth() {
     if (sheetsAuth) return sheetsAuth;
 
-    const credentialsFile = process.env.GOOGLE_CREDENTIALS_FILE || 'credentials.json';
-    const credentialsPath = path.join(__dirname, credentialsFile);
+    let credentials = null;
 
-    if (!fs.existsSync(credentialsPath)) {
-        console.log('[SHEETS] credentials.json dosyası bulunamadı');
-        return null;
+    // Önce environment variable'dan dene (Railway için)
+    if (process.env.GOOGLE_CREDENTIALS) {
+        try {
+            credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+            console.log('[SHEETS] Credentials environment variable\'dan yüklendi');
+        } catch (error) {
+            console.error('[SHEETS] GOOGLE_CREDENTIALS parse hatası:', error.message);
+        }
+    }
+
+    // Environment variable yoksa dosyadan oku (local için)
+    if (!credentials) {
+        const credentialsFile = process.env.GOOGLE_CREDENTIALS_FILE || 'credentials.json';
+        const credentialsPath = path.join(__dirname, credentialsFile);
+
+        if (!fs.existsSync(credentialsPath)) {
+            console.log('[SHEETS] credentials.json dosyası bulunamadı');
+            return null;
+        }
+
+        try {
+            credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+            console.log('[SHEETS] Credentials dosyadan yüklendi');
+        } catch (error) {
+            console.error('[SHEETS] Credentials dosya okuma hatası:', error.message);
+            return null;
+        }
     }
 
     try {
-        const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
         const auth = new google.auth.GoogleAuth({
             credentials: credentials,
             scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -113,7 +135,7 @@ async function getGoogleAuth() {
         sheetsAuth = auth;
         return auth;
     } catch (error) {
-        console.error('[SHEETS] Credentials yüklenirken hata:', error.message);
+        console.error('[SHEETS] Auth oluşturulurken hata:', error.message);
         return null;
     }
 }
